@@ -77,16 +77,30 @@ def _run(cmd: list, check: bool = True) -> subprocess.CompletedProcess:
     return r
 
 
-def probe_duration(ffprobe: str, audio_path: Path) -> float:
+def probe_duration(ffprobe: str, audio_path: Path, ffmpeg: str = "ffmpeg") -> float:
+    """探测音频时长：优先 ffprobe，失败则用 `ffmpeg -i` 解析 Duration（兼容无 ffprobe 的静态 ffmpeg）。"""
     exe = Path(ffprobe) if ffprobe else shutil.which("ffprobe")
-    if not exe:
-        return 90.0
+    if exe:
+        try:
+            r = _run([str(exe), "-v", "quiet", "-show_entries", "format=duration",
+                      "-of", "csv=p=0", str(audio_path)])
+            val = r.stdout.strip()
+            if val and val not in ("N/A", "nan"):
+                return float(val)
+        except Exception:
+            pass
+    # fallback：ffmpeg -i 输出中的 "Duration: 00:00:30.02"
+    ffmpeg_exe = shutil.which("ffmpeg") or ffmpeg
     try:
-        r = _run([str(exe), "-v", "quiet", "-show_entries", "format=duration",
-                  "-of", "csv=p=0", str(audio_path)])
-        return float(r.stdout.strip())
+        r = subprocess.run([ffmpeg_exe, "-hide_banner", "-i", str(audio_path)],
+                           capture_output=True, text=True)
+        m = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", r.stderr)
+        if m:
+            h, mm, s = int(m.group(1)), int(m.group(2)), float(m.group(3))
+            return h * 3600 + mm * 60 + s
     except Exception:
-        return 90.0
+        pass
+    return 90.0
 
 
 # --------------------------------------------------------------------------- #
@@ -157,7 +171,7 @@ def make_mv(args: argparse.Namespace) -> Path:
     if not image.exists():
         raise FileNotFoundError(f"封面图不存在: {image}")
 
-    duration = args.duration or probe_duration(None, audio)
+    duration = args.duration or probe_duration(None, audio, ffmpeg)
     w, h = _parse_resolution(args.resolution)
     fps = args.fps
 

@@ -206,17 +206,34 @@ def generate_song(client: AceStepClient, args: argparse.Namespace, out_dir: Path
 
 
 def _probe_duration(audio_path) -> float:
-    """无 ffprobe 时按 90s 兜底（仅用于生成 LRC 的均分估算）。"""
+    """探测音频时长（用于 LRC 均分估算）：优先 ffprobe，失败则用 ffmpeg -i。"""
+    import re
+    import shutil
+    import subprocess
     try:
-        import subprocess
-        out = subprocess.check_output(
-            ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
-             "-of", "csv=p=0", str(audio_path)],
-            text=True, stderr=subprocess.DEVNULL,
-        )
-        return float(out.strip())
+        ffprobe = shutil.which("ffprobe")
+        if ffprobe:
+            out = subprocess.check_output(
+                [ffprobe, "-v", "quiet", "-show_entries", "format=duration",
+                 "-of", "csv=p=0", str(audio_path)],
+                text=True, stderr=subprocess.DEVNULL,
+            )
+            val = out.strip()
+            if val and val not in ("N/A", "nan"):
+                return float(val)
     except Exception:
-        return 90.0
+        pass
+    try:
+        ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+        r = subprocess.run([ffmpeg, "-hide_banner", "-i", str(audio_path)],
+                           capture_output=True, text=True)
+        m = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", r.stderr)
+        if m:
+            h, mm, s = int(m.group(1)), int(m.group(2)), float(m.group(3))
+            return h * 3600 + mm * 60 + s
+    except Exception:
+        pass
+    return 90.0
 
 
 def main() -> int:
