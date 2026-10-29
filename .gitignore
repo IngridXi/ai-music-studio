@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# 输出产物
+output/
+outputs/
+songs/
+*.mp4
+*.mp3
+*.wav
+*.flac
+.mv_tmp/
+cover.jpg
+
+# 环境与密钥
+.env
+.env.local
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 模型缓存
+.cache/

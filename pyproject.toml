@@ -1,0 +1,23 @@
+[project]
+name = "ai-music-studio"
+version = "0.1.0"
+description = "AI 歌曲创作 + MV 动画生成工具包（基于 ACE-Step + ffmpeg）"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Ingrid Xi" }]
+keywords = ["music-generation", "music-video", "ai-music", "ffmpeg", "karaoke", "ace-step"]
+
+# 核心脚本（歌曲生成 / MV 合成 / LRC 解析）零第三方依赖，仅需系统 ffmpeg。
+# Pillow 仅用于 generate_cover.py 的本地封面生成（可选）。
+[project.optional-dependencies]
+cover = ["Pillow>=9.0"]
+
+[project.scripts]
+ai-song = "scripts.generate_song:main"
+ai-cover = "scripts.generate_cover:main"
+ai-mv = "scripts.make_mv:main"
+ai-pipeline = "scripts.pipeline:main"
+
+[tool.setuptools]
+packages = ["scripts"]

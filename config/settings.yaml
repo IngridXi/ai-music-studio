@@ -1,0 +1,36 @@
+# ai-music-studio 默认配置
+# 命令行参数优先于本文件；本文件用于存放不常改动、或希望固化的默认值。
+
+# ACE-Step 本地 REST API
+acestep:
+  host: 127.0.0.1
+  port: 8001
+  model: acestep-v15-turbo      # acestep-v15-turbo / acestep-v15-base / acestep-v15-sft
+  thinking: true                 # 启用 LM 思考，质量更好
+  inference_steps: 8             # turbo 推荐 8；base 推荐 32-64
+  batch_size: 2
+
+# 歌曲生成默认
+song:
+  lang: zh                       # 人声语言
+  format: mp3                    # mp3 / wav / flac
+
+# MV 合成默认
+mv:
+  resolution: 1920x1080
+  fps: 25
+  style: wave                    # wave / spectrum / bars / circle
+  color: "0xFFFFFF"
+  alpha: 0.9
+  vis_height: 160
+  position: bottom
+  karaoke: true                  # 逐字卡拉OK高亮
+  fontsize: 64
+  crf: 18
+  preset: medium
+  hwaccel: none                  # none / videotoolbox（macOS）
+
+# 封面生成默认
+cover:
+  size: 1920x1080
+  artist: AI 音乐工作室
