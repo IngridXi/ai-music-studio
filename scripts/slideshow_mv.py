@@ -107,11 +107,18 @@ def build_storyboard_filter(shots, w, h, fps, fade, audio_duration):
     n = len(shots)
     inputs = [s["image"] for s in shots]
     parts = []
-    # 1) 每张图运镜
+    VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".webm"}
+    # 1) 每个 shot 处理：视频片段直接截取，图片做运镜
     for i, s in enumerate(shots):
-        move = s.get("move", "zoom_in")
+        is_video = Path(s["image"]).suffix.lower() in VIDEO_EXTS
         dur = s["duration"]
-        cam = build_camera_move(move, w, h, fps, dur)
+        if is_video:
+            cam = (f"scale={w}:{h}:force_original_aspect_ratio=increase,"
+                   f"crop={w}:{h},trim=duration={dur:.3f},"
+                   f"setpts=PTS-STARTPTS,fps={fps}")
+        else:
+            move = s.get("move", "zoom_in")
+            cam = build_camera_move(move, w, h, fps, dur)
         parts.append(f"[{i}:v]{cam}[cam{i}]")
 
     # 2) xfade 串联（补偿转场损失，使总时长对齐音频）
@@ -164,11 +171,25 @@ def main() -> int:
     storyboard = json.loads(sb_path.read_text(encoding="utf-8"))
     shots = storyboard["shots"]
     fade = float(storyboard.get("fade", 0.8))
-    ornament = storyboard.get("ornament")
-    if ornament:
-        ornament = str((sb_path.parent / ornament).resolve())
-    # 图片路径相对分镜文件目录解析
     base_dir = sb_path.parent
+    # logo（左上角品牌标识）
+    logo = storyboard.get("logo")
+    if logo:
+        logo = str((base_dir / logo).resolve())
+    logo_width = int(storyboard.get("logo_width", 240))
+    logo_x = storyboard.get("logo_x", 40)
+    logo_y = storyboard.get("logo_y", 40)
+    # 书法标题
+    title = storyboard.get("title", "")
+    title_font = storyboard.get("title_font", "")
+    if title_font:
+        title_font = str((base_dir / title_font).resolve())
+    title_size = int(storyboard.get("title_size", 110))
+    title_color = storyboard.get("title_color", "0xD4AF37")
+    title_x = storyboard.get("title_x", "(w-text_w)/2")
+    title_y = storyboard.get("title_y", 60)
+    title_enable = storyboard.get("title_enable", "1")
+    # 图片路径相对分镜文件目录解析
     for s in shots:
         s["image"] = str((base_dir / s["image"]).resolve())
 
@@ -212,16 +233,22 @@ def main() -> int:
                 sub_path.write_text(srt, encoding="utf-8")
                 sub_part = f"[vbase]subtitles={_escape(sub_path)}[vsub]"
 
-    # 组装视频尾链：vbase -> (字幕) -> (纹样 overlay) -> vout
+    # 组装视频尾链：vbase -> (字幕) -> (logo) -> (书法标题) -> vout
     chain = filter_complex          # 以 [vbase] 结尾
     cur = "vbase"
     if sub_part:
         chain += ";" + sub_part      # [vbase]ass=...[vsub]
         cur = "vsub"
-    if ornament and Path(ornament).exists():
-        inputs.append(ornament)
-        oidx = len(inputs) - 1
-        chain += f";[{cur}][{oidx}:v]overlay=0:0:format=auto[vout]"
+    if logo and Path(logo).exists():
+        inputs.append(logo)
+        lidx = len(inputs) - 1
+        chain += f";[{lidx}:v]scale={logo_width}:-1[lgs];[{cur}][lgs]overlay={logo_x}:{logo_y}:format=auto[vlg]"
+        cur = "vlg"
+    if title and title_font and Path(title_font).exists():
+        fontfile = str(Path(title_font)).replace("\\", "/").replace(":", "\\:")
+        chain += (f";[{cur}]drawtext=fontfile='{fontfile}':text='{title}':"
+                  f"fontsize={title_size}:fontcolor={title_color}:"
+                  f"x={title_x}:y={title_y}:enable='{title_enable}'[vout]")
         cur = "vout"
     if cur != "vout":
         chain += f";[{cur}]null[vout]"
@@ -229,11 +256,16 @@ def main() -> int:
 
     out = Path(args.output) if args.output else audio.with_suffix(".mv.mp4")
 
+    VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".webm"}
     cmd = [ffmpeg, "-y"]
     for s in shots:
-        cmd += ["-loop", "1", "-t", f"{s['duration']:.3f}", "-i", str(s["image"])]
-    if ornament and Path(ornament).exists():
-        cmd += ["-loop", "1", "-i", str(ornament)]
+        is_video = Path(s["image"]).suffix.lower() in VIDEO_EXTS
+        if is_video:
+            cmd += ["-stream_loop", "-1", "-i", str(s["image"])]
+        else:
+            cmd += ["-loop", "1", "-t", f"{s['duration']:.3f}", "-i", str(s["image"])]
+    if logo and Path(logo).exists():
+        cmd += ["-loop", "1", "-i", str(logo)]
     cmd += ["-i", str(audio)]
     cmd += ["-filter_complex", filter_complex]
     cmd += ["-map", "[vout]", "-map", f"{len(inputs)}:a"]
