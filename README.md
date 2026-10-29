@@ -14,6 +14,7 @@
 - **🎼 本地 AI 作曲**：ACE-Step 1.5，MIT 协议，支持 50+ 语言带人声，10 秒～10 分钟，Apple 芯片 / NVIDIA / CPU 均可运行。
 - **📝 主题自动写词**：给一句主题，模型自动作词 + 作曲 + 编曲，并产出带时间戳的 LRC。
 - **🎬 动态 MV 合成**：Ken Burns 封面缓动 + 音频波形/频谱可视化 + 逐字卡拉OK歌词高亮。
+- **🎥 多图运镜 MV**：`slideshow_mv.py` 支持「每句歌词一张画面 + 镜头运动」，推/拉/摇/移/对角 8 种运镜 + 淡入淡出转场 + 文化纹样边框，电影感图文卡点视频。
 - **🇨🇳 中文友好**：完整支持中文歌词与中文字体（原版 Karaoke 脚本硬编码英文）。
 - **📦 近乎零依赖**：歌曲生成与 MV 合成脚本仅用 Python 标准库，只需系统安装 ffmpeg。
 - **🔌 模块化**：每个环节都可独立使用，也可一键全流程。
@@ -83,6 +84,8 @@ output/
 | `scripts/generate_song.py` | 生成歌曲（调 ACE-Step API） | `--topic "..."` / `--lyrics 文件` |
 | `scripts/generate_cover.py` | 生成渐变封面 | `--title "..." --artist "..."` |
 | `scripts/make_mv.py` | 合成 MV 动画 | `音频 封面 -l 歌词 --karaoke` |
+| `scripts/slideshow_mv.py` | 多图运镜 MV（电影感图文卡点） | `音频 分镜.json -l 歌词 --karaoke` |
+| `scripts/camera.py` | 运镜模块（推/拉/摇/移/对角） | 被 slideshow_mv 引用 |
 | `scripts/lrc.py` | LRC 解析/字幕生成（库） | 被 make_mv 引用 |
 | `scripts/visualizer.py` | 可视化滤镜构建（库） | 被 make_mv 引用 |
 
@@ -140,6 +143,8 @@ ai-music-studio/
 │   ├── generate_song.py    # 歌曲生成
 │   ├── generate_cover.py   # 封面生成（需 Pillow）
 │   ├── make_mv.py          # MV 合成
+│   ├── slideshow_mv.py     # 多图运镜 MV 合成
+│   ├── camera.py           # 运镜模块（推拉摇移）
 │   ├── lrc.py              # LRC 歌词解析
 │   └── visualizer.py       # 可视化滤镜
 ├── examples/               # 示例脚本

@@ -1,6 +1,6 @@
 ---
 name: ai-music-studio
-description: AI 歌曲创作与 MV 动画生成。根据主题或歌词生成带人声的完整歌曲（开源模型 ACE-Step，支持中英文），并合成带音频可视化动画与逐字歌词高亮的音乐视频。当用户想要"写一首歌""生成歌曲""AI 作曲""做歌曲 MV""音乐视频""AI 音乐""歌词配曲"时使用本技能。
+description: AI 歌曲创作与 MV 动画生成。根据主题或歌词生成带人声的完整歌曲（开源模型 ACE-Step，支持中英文），并合成 MV——支持音频可视化动画、逐字歌词高亮，以及多图运镜（推/拉/摇/移镜头运动 + 转场 + 文化纹样边框）的电影感图文卡点视频。当用户想要"写一首歌""生成歌曲""AI 作曲""做歌曲 MV""音乐视频""AI 音乐""歌词配曲"时使用本技能。
 agent_created: true
 ---
 
@@ -86,6 +86,32 @@ python3 <skill_dir>/scripts/make_mv.py \
 - `--karaoke`：逐字卡拉OK高亮；去掉则退化为普通字幕。
 - 纯文本歌词（无 .lrc）也可直接 `-l 歌词.txt`，脚本会按歌曲时长自动均分时间戳。
 - macOS 想加速编码：加 `--hwaccel videotoolbox`。
+
+### 第四步（进阶）：多图运镜 MV（电影感图文卡点）
+
+当需要「每句歌词配一张画面 + 镜头运动」时（如宣传片、品牌主题曲 MV），用 `slideshow_mv.py`：
+
+```bash
+python3 <skill_dir>/scripts/slideshow_mv.py \
+  歌曲.mp3 分镜.json -l 歌词.lrc --karaoke -o 成片.mp4
+```
+
+分镜.json 定义每段画面、运镜方式与时长：
+
+```json
+{
+  "ornament": "纹样边框.png",
+  "fade": 0.6,
+  "shots": [
+    {"image": "画面/01.png", "move": "zoom_in",  "duration": 6.0},
+    {"image": "画面/02.png", "move": "pan_right","duration": 5.5}
+  ]
+}
+```
+
+- **运镜**（`move`，见 `camera.py`）：`zoom_in` 推近 / `zoom_out` 拉远 / `pan_left`·`pan_right` 左右摇 / `tilt_up`·`tilt_down` 上下摇 / `diag_in`·`diag_out` 对角推拉。
+- **转场**：`fade` 淡入淡出（秒）；**纹样边框**：`ornament` 指定一张透明 PNG 叠加层（古建窗棂/回纹角花，营造文化韵味）。
+- 歌词时间戳可用 faster-whisper 对齐（`language="zh"` 词级时间戳），保证画面切换与唱词同步。
 
 ### 第五步：一键全流程（推荐）
 
