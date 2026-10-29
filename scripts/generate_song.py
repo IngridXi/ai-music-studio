@@ -86,7 +86,14 @@ class AceStepClient:
         return r.get("data", {})
 
     def download(self, path: str, dest: Path) -> Path:
-        data = self._get(f"/v1/audio?path={urllib.parse.quote(path)}")
+        # path 可能是 "/v1/audio?path=..." 完整路径，或裸的服务器路径
+        if path.startswith("/v1/audio"):
+            url = f"{self.base}{path}"
+        else:
+            url = f"{self.base}/v1/audio?path={urllib.parse.quote(path)}"
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = resp.read()
         dest.write_bytes(data)
         return dest
 
@@ -170,18 +177,12 @@ def generate_song(client: AceStepClient, args: argparse.Namespace, out_dir: Path
     result = wait_for_result(client, task_id)
 
     outputs = []
-    # 提取音频文件路径（可能有多个 batch）
-    files = result.get("file") if isinstance(result, dict) else None
-    if isinstance(files, str):
-        files = [files]
-    files = files or []
-
-    lyrics_text = result.get("lyrics", "") if isinstance(result, dict) else ""
+    files, lyrics_text = _parse_task_result(result)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     base = args.title or "song"
     for i, f in enumerate(files):
-        ext = Path(f).suffix or f".{args.format}"
+        ext = _guess_ext(f, args.format)
         audio_path = out_dir / f"{base}_{i + 1}{ext}"
         try:
             client.download(f, audio_path)
@@ -203,6 +204,56 @@ def generate_song(client: AceStepClient, args: argparse.Namespace, out_dir: Path
             item["lrc"] = lrc_path
         outputs.append(item)
     return outputs
+
+
+def _parse_task_result(result) -> tuple:
+    """解析 query_result 返回的任务结果，提取音频 file 列表和歌词文本。
+
+    ACE-Step 的 query_result 返回结构中，任务结果的 `result` 字段通常是一个
+    JSON 字符串（内含歌曲对象数组），而非直接的对象/数组，这里做兼容解析。
+    """
+    files: list = []
+    lyrics_text = ""
+    if not isinstance(result, dict):
+        return files, lyrics_text
+
+    raw = result.get("result")
+    items = []
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+            items = parsed if isinstance(parsed, list) else [parsed]
+        except (json.JSONDecodeError, TypeError):
+            items = []
+    elif isinstance(raw, list):
+        items = raw
+    elif isinstance(raw, dict):
+        items = [raw]
+
+    for item in items:
+        if isinstance(item, dict):
+            f = item.get("file")
+            if isinstance(f, str) and f:
+                files.append(f)
+            if not lyrics_text and item.get("lyrics"):
+                lyrics_text = item["lyrics"]
+
+    # 兜底：直接挂在 result 上的 file/lyrics
+    if not files:
+        f = result.get("file")
+        if isinstance(f, str):
+            files = [f]
+        lyrics_text = result.get("lyrics", lyrics_text) or lyrics_text
+    return files, lyrics_text
+
+
+def _guess_ext(file_field: str, fallback_format: str = "mp3") -> str:
+    """从 file 字段（可能是 /v1/audio?path=... 形式）推断音频扩展名。"""
+    low = file_field.lower()
+    for ext in (".mp3", ".wav", ".flac"):
+        if ext in low:
+            return ext
+    return f".{fallback_format}"
 
 
 def _probe_duration(audio_path) -> float:
