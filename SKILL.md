@@ -127,6 +127,51 @@ python3 <skill_dir>/scripts/pipeline.py \
 - 用 `present_files` 交付 `MV 成片 .mp4`（优先）与歌曲 `.mp3`。
 - 若有中文歌词，向用户说明生成结果可能出现的个别发音偏差。
 
+## 局部修改：只重唱某一句 / 某个词（Repaint）
+
+生成结果某句唱错、某个字发音不对、或想改一句词？不需要整首重跑——用 ACE-Step 的
+Repaint（局部重绘）：只重新生成指定时间区间，区间外音频保持不变。
+
+```bash
+# 按行号重唱第 5 句（不换词，仅修复发音/唱法）
+python3 <skill_dir>/scripts/edit_song.py 歌曲.mp3 -l 歌曲.lrc --line 5
+
+# 按文本定位（须唯一命中）
+python3 <skill_dir>/scripts/edit_song.py 歌曲.mp3 -l 歌曲.lrc --line-text "夏天的风"
+
+# 词/字级：只重唱"风"字（增强 LRC 用真实词级时间戳；普通 LRC 按字数均分估算）
+python3 <skill_dir>/scripts/edit_song.py 歌曲.mp3 -l 歌曲.lrc --word "风"
+
+# 换词重唱：把第 5 句换成新词
+python3 <skill_dir>/scripts/edit_song.py 歌曲.mp3 -l 歌曲.lrc --line 5 --new-lyrics "冬天的雪"
+```
+
+要点：
+- **模型必须是 base 系列**（`acestep-v15-base`，repaint 不支持 turbo/sft），脚本已默认。
+- 重绘区间自动外扩（`--pad`，默认 0.6s）且最短 3 秒（模型按 chunk 处理，过短会被对齐）。
+- `--new-lyrics` 会替换完整歌词中该行并传给模型，实现"改词重唱"；不传则原词重唱。
+- 输出为完整新音频 `<原名>_edit.mp3`（区间外不变），改完可重新合成 MV。
+- 逐字歌词时间戳可用 faster-whisper 对齐（`language="zh"` 词级时间戳），`--word` 定位更准。
+
+## 进阶：专业词曲 / 视频知识库（references/skills）
+
+`references/skills/`（索引见该目录 README.md）内置四类外部知识库，按需阅读对应 SKILL.md：
+
+- **作词/编曲规格单**（lw-* 18 个 + mc-* 29 个，jtydhr88）：需要**提高词曲质量**时用。
+  推荐 `lw-mandarin`（中文押韵/倒字检查，判断词能不能顺口唱）、`mc-arrangement-arch`
+  （段落起伏）、`mc-vocal-direction`（演唱方式）、`mc-ai-tell-audit`（诊断"AI 味"）。
+  产出的是规格单/判据文本，不改变生成后端，耗时较长，按需使用。
+- **hand-drawn-video-prompts**（kaomei，MIT）：把歌词逐段拆成统一画风的分镜提示词
+  （生图 + 图生视频两套），接 `slideshow_mv.py` 分镜 JSON 或图生视频工具，做手绘风 MV。
+- **openmontage-skills**（OpenMontage 的 8 个 skill，AGPL 仅内部参考）：
+  - `music-to-video` ⭐：音乐驱动、节拍同步视频工作流（分析音频 → 分帧 → HTML 合成 → 渲染 MP4）；
+  - `hyperframes-*`：用 HTML/CSS/GSAP 写画面、逐帧渲染成视频的代码渲染路线，
+    适合动态歌词排版、节奏卡点等纯 ffmpeg 难做的复杂动效（需 Node.js + `npx hyperframes` 工具链）；
+  - `ffmpeg`、`visual-style`、`music` 参考。
+
+路线选择：日常 MV 用纯 ffmpeg 的 `make_mv.py`/`slideshow_mv.py`（零依赖、稳定）；
+需要复杂动效/节奏卡点时走 HyperFrames 代码渲染路线。
+
 ## 自动化
 
 需要「每天/每周定时生成歌曲 + MV」时，创建 recurring 自动化，prompt 直接复用上面的命令，把主题/风格/输出路径写全。生成歌曲依赖 ACE-Step 服务常驻，自动化运行前需确保 `uv run acestep-api` 在运行。

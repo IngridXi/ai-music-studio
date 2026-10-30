@@ -52,8 +52,53 @@ class AceStepClient:
             headers["Authorization"] = f"Bearer {self.api_key}"
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")[:500]
+            raise RuntimeError(f"POST {path} 失败: HTTP {e.code}: {detail}") from None
+
+    def release_task_multipart(self, payload: dict, file_field: str,
+                               file_path: Path, timeout: int = 300) -> str:
+        """以 multipart/form-data 提交任务并上传文件（repaint/cover 等需要 src_audio 的场景）。
+
+        ACE-Step API 不允许音频用绝对路径引用，必须走文件上传字段
+        （如 src_audio / reference_audio）。
+        """
+        boundary = f"----acestep{int(time.time() * 1000):x}"
+        body = bytearray()
+        for k, v in payload.items():
+            if v is None:
+                continue
+            body += (f"--{boundary}\r\n"
+                     f'Content-Disposition: form-data; name="{k}"\r\n\r\n'
+                     f"{v}\r\n").encode("utf-8")
+        filename = Path(file_path).name
+        body += (f"--{boundary}\r\n"
+                 f'Content-Disposition: form-data; name="{file_field}"; '
+                 f'filename="{filename}"\r\n'
+                 f"Content-Type: application/octet-stream\r\n\r\n").encode("utf-8")
+        body += Path(file_path).read_bytes()
+        body += f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+        url = f"{self.base}/release_task"
+        headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        req = urllib.request.Request(url, data=bytes(body), headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                r = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")[:500]
+            raise RuntimeError(f"release_task 上传失败: HTTP {e.code}: {detail}") from None
+        if r.get("code") != 200:
+            raise RuntimeError(f"release_task 失败: {r.get('error') or r}")
+        task_id = r.get("data", {}).get("task_id")
+        if not task_id:
+            raise RuntimeError(f"未返回 task_id: {r}")
+        return task_id
 
     def _get(self, path: str, timeout: int = 120) -> bytes:
         url = f"{self.base}{path}"
@@ -156,7 +201,8 @@ def build_payload(args: argparse.Namespace) -> dict:
         lyrics_text = Path(args.lyrics).read_text(encoding="utf-8") if Path(args.lyrics).exists() else args.lyrics
         payload["lyrics"] = lyrics_text
         payload["prompt"] = args.style or ""
-        payload["use_format"] = True  # 让 LM 优化歌词结构
+        # 让 LM 优化歌词结构；但 LM 偶尔会整段改写歌词（跑题），--no-format 可关闭
+        payload["use_format"] = not args.no_format
     else:
         # 主题驱动：模型自动写词 + 作曲
         payload["sample_mode"] = True
@@ -301,6 +347,7 @@ def main() -> int:
     p.add_argument("--batch", type=int, default=2, help="并行生成数量（1-8）")
     p.add_argument("--format", default="mp3", help="输出格式 mp3/wav/flac")
     p.add_argument("--no-thinking", action="store_true", help="关闭 LM 思考（速度更快，质量略降）")
+    p.add_argument("--no-format", action="store_true", help="关闭 LM 歌词结构优化（歌词已带结构标签、或发现 LM 擅自改词时用它）")
     p.add_argument("--title", help="输出文件名前缀（默认 song）")
     p.add_argument("--host", default=DEFAULT_HOST, help=f"API 主机（默认 {DEFAULT_HOST}）")
     p.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"API 端口（默认 {DEFAULT_PORT}）")

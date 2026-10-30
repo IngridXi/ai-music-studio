@@ -14,7 +14,6 @@
 - **🎼 本地 AI 作曲**：ACE-Step 1.5，MIT 协议，支持 50+ 语言带人声，10 秒～10 分钟，Apple 芯片 / NVIDIA / CPU 均可运行。
 - **📝 主题自动写词**：给一句主题，模型自动作词 + 作曲 + 编曲，并产出带时间戳的 LRC。
 - **🎬 动态 MV 合成**：Ken Burns 封面缓动 + 音频波形/频谱可视化 + 逐字卡拉OK歌词高亮。
-- **🎥 多图运镜 MV**：`slideshow_mv.py` 支持「每句歌词一张画面 + 镜头运动」，推/拉/摇/移/对角 8 种运镜 + 淡入淡出转场 + 文化纹样边框，电影感图文卡点视频。
 - **🇨🇳 中文友好**：完整支持中文歌词与中文字体（原版 Karaoke 脚本硬编码英文）。
 - **📦 近乎零依赖**：歌曲生成与 MV 合成脚本仅用 Python 标准库，只需系统安装 ffmpeg。
 - **🔌 模块化**：每个环节都可独立使用，也可一键全流程。
@@ -82,12 +81,38 @@ output/
 |------|------|------|
 | `scripts/pipeline.py` | 一键全流程（歌曲→封面→MV） | `--topic` 或 `--lyrics` |
 | `scripts/generate_song.py` | 生成歌曲（调 ACE-Step API） | `--topic "..."` / `--lyrics 文件` |
+| `scripts/edit_song.py` | 局部修改：只重唱某句/某词（ACE-Step Repaint） | `--line N` / `--word "风"` / `--new-lyrics` |
 | `scripts/generate_cover.py` | 生成渐变封面 | `--title "..." --artist "..."` |
 | `scripts/make_mv.py` | 合成 MV 动画 | `音频 封面 -l 歌词 --karaoke` |
-| `scripts/slideshow_mv.py` | 多图运镜 MV（电影感图文卡点） | `音频 分镜.json -l 歌词 --karaoke` |
-| `scripts/camera.py` | 运镜模块（推/拉/摇/移/对角） | 被 slideshow_mv 引用 |
+| `scripts/slideshow_mv.py` | 多图运镜电影感 MV | `音频 分镜.json -l 歌词.lrc` |
 | `scripts/lrc.py` | LRC 解析/字幕生成（库） | 被 make_mv 引用 |
 | `scripts/visualizer.py` | 可视化滤镜构建（库） | 被 make_mv 引用 |
+
+### 局部修改（edit_song.py）
+
+基于 ACE-Step 1.5 的 **Repaint（局部重绘）** 能力：只重新生成歌曲的某个时间区间，
+区间外音频保持不变。支持按行号 / 行文本 / 词（字）定位，可替换新词重唱：
+
+```bash
+# 第 5 句唱错了，重唱一遍
+python3 scripts/edit_song.py 歌曲.mp3 -l 歌曲.lrc --line 5
+
+# 只重唱"风"字（修复发音）
+python3 scripts/edit_song.py 歌曲.mp3 -l 歌曲.lrc --word "风"
+
+# 改词重唱
+python3 scripts/edit_song.py 歌曲.mp3 -l 歌曲.lrc --line 5 --new-lyrics "冬天的雪"
+```
+
+> 注意：Repaint 仅 base 系列模型支持（`acestep-v15-base`），turbo/sft 不支持。
+
+### 外部知识库（references/skills，索引见该目录 README.md）
+
+| 库 | 来源 | 用途 |
+|----|------|------|
+| lw-skills / mc-skills | jtydhr88（47 个 skill） | 作词（押韵/倒字）与编曲（和声/配器/段落）专业规格单，提升词曲质量 |
+| hand-drawn-video-prompts | kaomei（MIT） | 歌词 → 手绘风分镜提示词（生图 + 图生视频），做手绘 MV |
+| openmontage-skills | OpenMontage（8 个，AGPL 内部参考） | `music-to-video` 节拍同步音乐视频工作流；HyperFrames HTML/GSAP 代码渲染路线（动态歌词、节奏卡点）；ffmpeg/visual-style 参考 |
 
 ### 常用命令示例
 
@@ -143,8 +168,6 @@ ai-music-studio/
 │   ├── generate_song.py    # 歌曲生成
 │   ├── generate_cover.py   # 封面生成（需 Pillow）
 │   ├── make_mv.py          # MV 合成
-│   ├── slideshow_mv.py     # 多图运镜 MV 合成
-│   ├── camera.py           # 运镜模块（推拉摇移）
 │   ├── lrc.py              # LRC 歌词解析
 │   └── visualizer.py       # 可视化滤镜
 ├── examples/               # 示例脚本

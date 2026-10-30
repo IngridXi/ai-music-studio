@@ -113,7 +113,8 @@ def build_storyboard_filter(shots, w, h, fps, fade, audio_duration):
         is_video = Path(s["image"]).suffix.lower() in VIDEO_EXTS
         dur = s["duration"]
         if is_video:
-            cam = (f"scale={w}:{h}:force_original_aspect_ratio=increase,"
+            # 放大 8% 再中心裁剪，裁掉边缘的"AI生成"水印
+            cam = (f"scale={int(w * 1.08)}:{int(h * 1.08)}:force_original_aspect_ratio=increase,"
                    f"crop={w}:{h},trim=duration={dur:.3f},"
                    f"setpts=PTS-STARTPTS,fps={fps}")
         else:
@@ -189,6 +190,8 @@ def main() -> int:
     title_x = storyboard.get("title_x", "(w-text_w)/2")
     title_y = storyboard.get("title_y", 60)
     title_enable = storyboard.get("title_enable", "1")
+    title_border = int(storyboard.get("title_border", 0))
+    title_bordercolor = storyboard.get("title_bordercolor", "0x000000")
     # 图片路径相对分镜文件目录解析
     for s in shots:
         s["image"] = str((base_dir / s["image"]).resolve())
@@ -248,6 +251,7 @@ def main() -> int:
         fontfile = str(Path(title_font)).replace("\\", "/").replace(":", "\\:")
         chain += (f";[{cur}]drawtext=fontfile='{fontfile}':text='{title}':"
                   f"fontsize={title_size}:fontcolor={title_color}:"
+                  f"borderw={title_border}:bordercolor={title_bordercolor}:"
                   f"x={title_x}:y={title_y}:enable='{title_enable}'[vout]")
         cur = "vout"
     if cur != "vout":
